@@ -1,5 +1,24 @@
-import '@/styles/globals.css'
+import "../styles/globals.css";
+import { Fragmant, Fragment } from 'react'
 
-export default function App({ Component, pageProps }) {
-  return <Component {...pageProps} />
+
+//components
+import CreateOrder from "./components/CreateOrder";
+import ListProducts from "./components/ListProducts";
+import Comfirmation from "./components/Comfirmation";
+
+
+function MyApp({ Component, pageProps }) {
+  return (
+    <Fragment>
+      <div className="container">
+          <CreateOrder />
+          <ListProducts />
+          <Comfirmation />
+      </div>
+      
+    </Fragment>
+  );
 }
+
+export default MyApp;
