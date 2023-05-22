@@ -1,0 +1,197 @@
+DROP TABLE IF EXISTS Line CASCADE;
+DROP TABLE IF EXISTS Reservation CASCADE;
+DROP TABLE IF EXISTS Client CASCADE;
+DROP TABLE IF EXISTS Product CASCADE;
+DROP TABLE IF EXISTS Receipt CASCADE;
+
+CREATE TABLE Product(
+product_id int PRIMARY KEY,
+product_name varchar(35) not null,
+product_description varchar(70),
+product_QOH char(8) not null,
+product_unitprice char(8) not null,
+product_type char(4) not null
+);
+
+CREATE TABLE Client (
+client_id int PRIMARY KEY,
+client_fname varchar(20) not null,
+client_lname varchar(20) not null,
+clinet_type varchar(4) not null
+);
+
+Create TABLE reservation(
+res_code int PRIMARY KEY,
+res_date date not null,
+res_Retrievaltime int,
+
+client_id int,
+CONSTRAINT generates FOREIGN KEY (client_id) REFERENCES Client(client_id)
+ON UPDATE CASCADE ON DELETE CASCADE
+);
+
+CREATE TABLE Line(
+line_number int PRIMARY KEY,
+res_code int,
+product_id int,
+Line_quantityordered int,
+Line_unitprice int,
+CONSTRAINT contains FOREIGN KEY (res_code) REFERENCES reservation(res_code)
+ON UPDATE CASCADE ON DELETE CASCADE,
+CONSTRAINT is_found_in FOREIGN KEY (product_id) REFERENCES Product(product_id)
+ON UPDATE CASCADE ON DELETE CASCADE
+);
+
+CREATE TABLE Receipt (
+rec_number int PRIMARY KEY,
+Rec_totalprice int,
+res_code int,
+CONSTRAINT contains FOREIGN KEY (res_code) REFERENCES reservation(res_code)
+ON UPDATE CASCADE ON DELETE CASCADE
+);
+
+//Subtypes
+
+CREATE TABLE Student (
+Client_id int PRIMARY KEY REFERENCES Client(Client_id),
+Student_CreditNumber int
+);
+
+CREATE TABLE Faculty (
+Client_id int PRIMARY KEY REFERENCES Client(Client_id),
+FacultyRank int
+);
+
+CREATE TABLE Drink (
+Product_id int PRIMARY KEY REFERENCES Product(Product_id),
+Drink_Temperature int
+);
+
+CREATE TABLE Snack (
+Product_id int PRIMARY KEY REFERENCES Product(Product_id),
+Snack_Category varchar(30)
+);
+
+CREATE TABLE Plat (
+Product_id int PRIMARY KEY REFERENCES Product(Product_id),
+Plat_Composition varchar (40)
+);
+
+CREATE TABLE Dessert (
+Product_id int PRIMARY KEY REFERENCES Product(Product_id),
+Dessert_CaloriesNumber int
+);
+
+-----------------------------------------------------------------
+
+INSERT INTO Product VALUES
+('10001', 'Panini Pesto', 'Pain blanc au poulet avec sauce pestp', 8, 29, 'S'),
+('10002', 'Tacos VH', 'Pain mexicain, viande hachée,sauce au choix', 20,  26, 'S'),
+('10003', 'Tacos Poulet', 'Pain mexicain, poulet, sauce au choix', 23, 25, 'S'),
+('10004', 'Jus d_orange', 'Jus préssée', 10, 13, 'DR'),
+('10005', 'Sneekers', 'Bien moelleux bien chocolat', 5, 13, 'DS'),
+('10006', 'Tenders de poulet', 'Accompagnement au choix', 7, 40, 'P'),
+('10007', 'Couscous', 'Specialité du vendredi', 20, 40, 'P'),
+('10008', 'Lasagne', 'Fine pate garnies', 5, 26, 'P'),
+('10009', 'Ice Tea', 'Thé glacé pêche', 10, 8, 'DR');
+
+INSERT INTO Client VALUES
+('100552', 'Rihab', 'Zouitni'),
+('100354', 'Mehdi', Bouirig'),
+('80131', 'Rahma', 'El Bouazzaoui'),
+('99591', 'Hajar', 'Oumadi'),
+('102865', 'Basma', 'Hiouich');
+
+INSERT INTO Reservation
+('1', CURRENT_DATE,'12,00', '100552'),
+('2', CURRENT_DATE,'14,00', '100354');
+
+INSERT INTO Line
+('1', '1', '10009','2','8'),
+('2', '1', '10007', '1', '40'),
+('3', '2', '10001', '1', '29');
+
+INNSERT INTO Receipt
+('1', '56', '1'),
+('2', '29', '2');
+
+------------------------------------------------------------------------
+
+1-	Trigger to reduce quantity on hand when there is a new sell:
+CREATE OR REPLACE FUNCTION reduce_quantity_on_hand() RETURNS TRIGGER AS $$
+BEGIN
+    UPDATE Product SET product_QOH = product_QOH - NEW.Line_quantityordered
+    WHERE product_id = NEW.product_id;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+CREATE TRIGGER update_quantity_on_hand AFTER INSERT ON Line
+FOR EACH ROW EXECUTE PROCEDURE reduce_quantity_on_hand();
+
+
+2-	Trigger to set line_unitprice based on client type:
+CREATE OR REPLACE FUNCTION set_price_based_on_client_type() RETURNS TRIGGER AS $$
+DECLARE
+    client_type CHAR(4);
+BEGIN
+    SELECT clinet_type INTO client_type FROM Client WHERE client_id = (SELECT client_id FROM Reservation WHERE res_code = NEW.res_code);
+    IF client_type = 'stud' THEN
+        NEW.Line_unitprice := (SELECT product_studentprice FROM Product WHERE product_id = NEW.product_id);
+    ELSIF client_type = 'facu' THEN
+        NEW.Line_unitprice := (SELECT product_facultyprice FROM Product WHERE product_id = NEW.product_id);
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER update_price_based_on_client_type BEFORE INSERT ON Line
+FOR EACH ROW EXECUTE PROCEDURE set_price_based_on_client_type();
+
+
+3-	Trigger to calculate the rec_totalprice:
+CREATE OR REPLACE FUNCTION calculate_rec_totalprice() RETURNS TRIGGER AS $$
+BEGIN
+    UPDATE Receipt SET Rec_totalprice = (SELECT SUM(Line_quantityordered * Line_unitprice) FROM Line WHERE res_code = NEW.res_code) 
+    WHERE res_code = NEW.res_code;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER update_rec_totalprice AFTER INSERT OR UPDATE ON Line
+FOR EACH ROW EXECUTE PROCEDURE calculate_rec_totalprice();
+
+
+4-	View to see how many products are still available (QOH > 0):
+CREATE VIEW Available_Products AS
+SELECT product_name, product_QOH 
+FROM Product 
+WHERE product_QOH > 0;
+
+
+5-	View to see the number of orders a client has:
+CREATE VIEW Client_Orders AS
+SELECT client_id, COUNT(*) as number_of_orders
+FROM Reservation
+GROUP BY client_id;
+
+
+6-	View to see the number of products in an order:
+CREATE VIEW Order_Products AS
+SELECT res_code, COUNT(*) as number_of_products
+FROM Line
+GROUP BY res_code;
+
+
+7-	Function to generate unique serial numbers:
+CREATE OR REPLACE FUNCTION generate_unique_serial() RETURNS INT AS $$
+DECLARE 
+    last_value INT;
+BEGIN
+    SELECT max(some_primary_key) INTO last_value FROM SomeTable;  -- Replace `some_primary_key` and `SomeTable` with your actual primary key field and table
+    IF last_value IS NULL THEN
+        RETURN 1;
+    ELSE
+        RETURN last_value + 1;
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
