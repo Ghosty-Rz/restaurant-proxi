@@ -1,5 +1,9 @@
 This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
 
+![image](https://github.com/Ghosty-Rz/restaurant-proxi/assets/107633200/f9d0ecc4-72a7-4358-be3f-58b45adf8021)
+![image](https://github.com/Ghosty-Rz/restaurant-proxi/assets/107633200/5ea9e802-4b18-4cd6-813c-9047f5a3674d)
+
+
 ## Getting Started
 
 First, run the development server:
